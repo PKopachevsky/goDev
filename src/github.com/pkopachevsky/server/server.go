@@ -53,8 +53,8 @@ func processClient(conn net.Conn) {
 	conn.Close()
 }
 func launchCommand(conn net.Conn) error {
-	reader := bufio.NewReader(conn)
-	line, err := reader.ReadString('\n')
+	bufReader := bufio.NewReader(conn)
+	line, err := bufReader.ReadString('\n')
 	if err != nil {
 		return err
 	}
@@ -73,9 +73,31 @@ func launchCommand(conn net.Conn) error {
 		return err
 	}
 
-	go io.Copy(stdin, conn)
-	go io.Copy(conn, stdout)
-	go io.Copy(conn, stderr)
+	reader := connReader{conn}
+	writer := connWriter{conn}
+
+	go io.Copy(stdin, reader)
+	go io.Copy(writer, stdout)
+	go io.Copy(writer, stderr)
 
 	return cmd.Run()
+}
+
+type connReader struct {
+	Conn net.Conn;
+}
+
+func (c connReader) Read(p []byte) (n int, err error) {
+	n, err = c.Conn.Read(p);
+	fmt.Printf("Input:\t%s", string(p));
+	return n, err;
+}
+
+type connWriter struct {
+	Conn net.Conn;
+}
+
+func (c connWriter) Write(p []byte) (n int, err error) {
+	fmt.Printf("Output:\n%s\n",string(p));
+	return c.Conn.Write(p);
 }
