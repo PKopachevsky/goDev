@@ -35,9 +35,24 @@ func startClient(addr string) {
 		cmd := fmt.Sprintf("%s\n", *execute)
 		conn.Write([]byte(cmd))
 	}
-	go io.Copy(os.Stdout, conn)
+	go io.Copy(connWriter{os.Stdout, os.Stderr}, conn)
 	_, err = io.Copy(conn, os.Stdin)
 	if err != nil {
 		fmt.Printf("Connection error: %s\n", err)
+	}
+}
+
+type connWriter struct {
+	destOk io.Writer;
+	destErr io.Writer;
+}
+
+func (cr connWriter) Write(p []byte) (n int, err error) {
+	if(p[len(p)-1] == 0) {
+		fmt.Println("Success!")
+		return cr.destOk.Write(p[0:len(p)-1])
+	} else {
+		fmt.Println("Failure!")
+		return cr.destErr.Write(p[0:len(p)-1])
 	}
 }

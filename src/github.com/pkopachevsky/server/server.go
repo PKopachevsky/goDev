@@ -74,11 +74,12 @@ func launchCommand(conn net.Conn) error {
 	}
 
 	reader := connReader{conn}
-	writer := connWriter{conn}
+	okWriter := connWriter{conn}
+	errWriter := errorWriter{conn}
 
 	go io.Copy(stdin, reader)
-	go io.Copy(writer, stdout)
-	go io.Copy(writer, stderr)
+	go io.Copy(okWriter, stdout)
+	go io.Copy(errWriter, stderr)
 
 	return cmd.Run()
 }
@@ -98,6 +99,17 @@ type connWriter struct {
 }
 
 func (c connWriter) Write(p []byte) (n int, err error) {
-	fmt.Printf("Output:\n%s\n",string(p));
-	return c.Conn.Write(p);
+	fmt.Printf("Output:\n%s\n", string(p));
+	okResult := append(p, 0)
+	return c.Conn.Write(okResult);
+}
+
+type errorWriter struct {
+	Conn net.Conn;
+}
+
+func (c errorWriter) Write(p []byte) (n int, err error) {
+	fmt.Printf("Error:%s\n", string(p));
+	errorResult := append(p, 1)
+	return c.Conn.Write(errorResult);
 }
