@@ -15,6 +15,7 @@ import (
 var (
 	host = flag.String("h", "localhost", "Host")
 	port = flag.Int("p", 0, "Port")
+	fileServer = flag.Bool("f", false, "Server for file upload")
 )
 
 func main() {
@@ -34,13 +35,25 @@ func main() {
 		if err != nil {
 			log.Printf("Error accepting connection from client: %s", err)
 		} else {
-			go processClient(conn)
+			go processClient(conn, *fileServer)
 		}
 	}
 }
 
-func processClient(conn net.Conn) {
-	err := launchCommand(conn)
+func processClient(conn io.ReadWriteCloser, command bool, fileServer bool) error {
+	if command && fileServer {
+		return fmt.Errorf("Can't launch server in command and file mode simultaneously")
+	}
+	var err error;
+	switch {
+	case command:
+		err = commandProcessor(conn)
+	case fileServer:
+		err = fileProcessor(conn)
+	default:
+		err = defaultProcessor(conn)
+	}
+
 	if err != nil {
 		log.Println(err)
 		conn.Close()
@@ -52,7 +65,24 @@ func processClient(conn net.Conn) {
 	}
 	conn.Close()
 }
-func launchCommand(conn net.Conn) error {
+
+func fileProcessor(conn io.ReadCloser) error {
+	defer conn.Close()
+	reader :=bufio.NewReader(conn)
+	line, err := reader.ReadString('\n')
+	if err != nil {
+		return err
+	}
+	line = strings.TrimSpace(line)
+	file, err := os.Create(line)
+	if err != nil {
+		return err
+	}
+	_, err = io.Copy(file, conn)
+	return err
+}
+
+func commandProcessor(conn net.Conn) error {
 	bufReader := bufio.NewReader(conn)
 	line, err := bufReader.ReadString('\n')
 	if err != nil {
@@ -83,6 +113,15 @@ func launchCommand(conn net.Conn) error {
 
 	return cmd.Run()
 }
+
+func defaultProcessor(conn io.ReadCloser) error {
+	_, err := io.Copy(connWriter{conn}, conn)
+	if err != nil {
+		return err
+	}
+	return conn.Close()
+}
+
 
 type connReader struct {
 	Conn net.Conn;
