@@ -16,6 +16,7 @@ var (
 	host = flag.String("h", "localhost", "Host")
 	port = flag.Int("p", 0, "Port")
 	fileServer = flag.Bool("f", false, "Server for file upload")
+	command = flag.Bool("c", false, "Command server")
 )
 
 func main() {
@@ -35,7 +36,7 @@ func main() {
 		if err != nil {
 			log.Printf("Error accepting connection from client: %s", err)
 		} else {
-			go processClient(conn, *fileServer)
+			go processClient(conn, *command, *fileServer)
 		}
 	}
 }
@@ -54,16 +55,7 @@ func processClient(conn io.ReadWriteCloser, command bool, fileServer bool) error
 		err = defaultProcessor(conn)
 	}
 
-	if err != nil {
-		log.Println(err)
-		conn.Close()
-		return
-	}
-	_, err2 := io.Copy(os.Stdin, conn)
-	if err2 != nil {
-		log.Println(err)
-	}
-	conn.Close()
+	return err;
 }
 
 func fileProcessor(conn io.ReadCloser) error {
@@ -73,6 +65,7 @@ func fileProcessor(conn io.ReadCloser) error {
 	if err != nil {
 		return err
 	}
+	fmt.Println("Receiving file ")
 	line = strings.TrimSpace(line)
 	file, err := os.Create(line)
 	if err != nil {
@@ -82,7 +75,7 @@ func fileProcessor(conn io.ReadCloser) error {
 	return err
 }
 
-func commandProcessor(conn net.Conn) error {
+func commandProcessor(conn io.ReadWriteCloser) error {
 	bufReader := bufio.NewReader(conn)
 	line, err := bufReader.ReadString('\n')
 	if err != nil {
@@ -114,7 +107,7 @@ func commandProcessor(conn net.Conn) error {
 	return cmd.Run()
 }
 
-func defaultProcessor(conn io.ReadCloser) error {
+func defaultProcessor(conn io.ReadWriteCloser) error {
 	_, err := io.Copy(connWriter{conn}, conn)
 	if err != nil {
 		return err
@@ -124,7 +117,7 @@ func defaultProcessor(conn io.ReadCloser) error {
 
 
 type connReader struct {
-	Conn net.Conn;
+	Conn io.ReadWriteCloser;
 }
 
 func (c connReader) Read(p []byte) (n int, err error) {
@@ -134,7 +127,7 @@ func (c connReader) Read(p []byte) (n int, err error) {
 }
 
 type connWriter struct {
-	Conn net.Conn;
+	Conn io.ReadWriteCloser;
 }
 
 func (c connWriter) Write(p []byte) (n int, err error) {
@@ -144,7 +137,7 @@ func (c connWriter) Write(p []byte) (n int, err error) {
 }
 
 type errorWriter struct {
-	Conn net.Conn;
+	Conn io.ReadWriteCloser;
 }
 
 func (c errorWriter) Write(p []byte) (n int, err error) {

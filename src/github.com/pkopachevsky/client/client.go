@@ -6,10 +6,11 @@ import (
 	"io"
 	"net"
 	"os"
+	"time"
 )
 
 var (
-	execute = flag.String("e", "sh", "Execute command")
+	execute = flag.String("e", "", "Execute command")
 	upload  = flag.String("u", "", "Upload file")
 	host = flag.String("h", "localhost", "Host")
 	port = flag.Int("p", 8888, "Port")
@@ -18,15 +19,19 @@ var (
 func main() {
 	flag.Parse()
 	addr := fmt.Sprintf("%s:%d", *host, *port)
-	startClient(addr, *execute, *upload)
+	err := startClient(addr, *execute, *upload)
+	if err != nil {
+		fmt.Printf("Error: %s.\n", err.Error())
+	}
 }
 
-func startClient(addr string, execute string, upload string) {
+func startClient(addr string, execute string, upload string) error{
 	fmt.Printf("Conneciting to %s\n", addr)
+
 	conn, err := net.Dial("tcp", addr)
 	if err != nil {
 		fmt.Printf("Can't connect to server: %s\n", err)
-		return
+		return err
 	}
 	fmt.Printf("Connected.\n")
 
@@ -42,14 +47,12 @@ func startClient(addr string, execute string, upload string) {
 			err = defaultClient(conn)
 		}
 
-	go io.Copy(connWriter{os.Stdout, os.Stderr}, conn)
-	_, err = io.Copy(conn, os.Stdin)
-	if err != nil {
-		fmt.Printf("Connection error: %s\n", err)
-	}
+	return err
 }
 
 func fileClient(filename string, conn io.WriteCloser) error {
+	fmt.Println("Starting file server")
+
 	file, err := os.Open(filename)
 	if err != nil {
 		return err
@@ -62,7 +65,8 @@ func fileClient(filename string, conn io.WriteCloser) error {
 }
 
 func uploadFile(name string, conn io.WriteCloser, file io.ReadCloser) error {
-	_, err := io.WriteString(conn, fmt.Sprintf("%s\n", name))
+	fmt.Printf("Uploading file %s", name)
+	_, err := io.WriteString(conn, fmt.Sprintf("%s_%d\n", name, time.Now()))
 	if err != nil {
 		return err
 	}
@@ -86,8 +90,8 @@ func commandClient(command string, conn io.ReadWriteCloser) error {
 }
 
 func defaultClient(conn io.ReadWriteCloser) error {
-	go io.Copy(os.Stdout, conn)
-	_, err := io.Copy(connWriter{conn}, os.Stdin)
+	go io.Copy(connWriter{os.Stdout, os.Stderr}, conn)
+	_, err := io.Copy(conn, os.Stdin)
 	if err != nil {
 		return err
 	}
